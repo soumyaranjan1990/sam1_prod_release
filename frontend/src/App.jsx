@@ -1,6 +1,10 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+
+// Auth imports
 import LoginPage from './pages/Login';
+import SignupPage from './pages/auth/Signup';
+import ForgotPasswordPage from './pages/auth/ForgotPassword';
 
 // Dashboard imports
 import EmployeeDashboard from './pages/dashboards/EmployeeDashboard';
@@ -24,6 +28,8 @@ function App() {
       <Routes>
         {/* Auth */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
         {/* Dashboards */}
         <Route path="/dashboard/employee" element={<EmployeeDashboard />} />

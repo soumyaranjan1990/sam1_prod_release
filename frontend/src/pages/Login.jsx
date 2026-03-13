@@ -105,6 +105,27 @@ const LoginPage = () => {
                                 >
                                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Sign In <ArrowRight className="w-5 h-5" /></>}
                                 </button>
+
+                                <div className="flex flex-col gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => window.location.href = '/forgot-password'}
+                                        className="text-slate-400 hover:text-white text-sm transition-colors text-center"
+                                    >
+                                        Forgot Password?
+                                    </button>
+                                    <div className="h-px bg-slate-800 w-full" />
+                                    <p className="text-slate-500 text-sm text-center">
+                                        Don't have an account?{' '}
+                                        <button
+                                            type="button"
+                                            onClick={() => window.location.href = '/signup'}
+                                            className="text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                                        >
+                                            Sign Up
+                                        </button>
+                                    </p>
+                                </div>
                             </motion.form>
                         ) : (
                             <motion.form

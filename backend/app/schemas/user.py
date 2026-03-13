@@ -44,3 +44,18 @@ class LoginRequest(BaseModel):
 class OTPVerifyRequest(BaseModel):
     username: str
     code: str
+
+class SignUpRequest(BaseModel):
+    full_name: str
+    employee_id: str
+    email: EmailStr
+    phone_number: Optional[str] = None
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    username_or_email: str
+
+class PasswordResetRequest(BaseModel):
+    username_or_email: str
+    code: str
+    new_password: str

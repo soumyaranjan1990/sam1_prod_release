@@ -29,6 +29,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     role = Column(Enum(UserRole), default=UserRole.EMPLOYEE)
     employee_id = Column(String, unique=True, index=True, nullable=True)
+    phone_number = Column(String(15), nullable=True)
     is_active = Column(Boolean, default=True)
     is_superuser = Column(Boolean, default=False)
     is_first_login = Column(Boolean, default=True)
@@ -47,3 +48,4 @@ class OTP(Base):
     purpose = Column(Enum(OTPPurpose), default=OTPPurpose.LOGIN)
 
     user = relationship("User", back_populates="otps")
+    

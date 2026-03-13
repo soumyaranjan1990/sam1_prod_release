@@ -76,5 +76,59 @@ export const api = {
     // Get current user details
     getCurrentUser: async () => {
         return api.fetchWithAuth('/auth/me');
+    },
+
+    // Signup method
+    signup: async (data) => {
+        const response = await fetch(`${API_URL}/auth/signup`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Signup failed');
+        }
+
+        return response.json();
+    },
+
+    // Forgot password method
+    forgotPassword: async (usernameOrEmail) => {
+        const response = await fetch(`${API_URL}/auth/forgot-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username_or_email: usernameOrEmail }),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to send OTP');
+        }
+
+        return response.json();
+    },
+
+    // Reset password method
+    resetPassword: async (data) => {
+        const response = await fetch(`${API_URL}/auth/reset-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Password reset failed');
+        }
+
+        return response.json();
     }
 };

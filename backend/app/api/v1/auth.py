@@ -1,4 +1,5 @@
-from datetime import timedelta
+import random
+from datetime import datetime, timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -7,9 +8,11 @@ from sqlalchemy.orm import Session
 from app.core import security
 from app.core.security import settings
 from app.db.session import get_db
-from app.schemas.user import Token, User
+from app.schemas.user import Token, User, SignUpRequest, ForgotPasswordRequest, PasswordResetRequest
 from app.services.user import user as user_service
 from app.api.deps import get_current_user
+from app.models.user import OTP, OTPPurpose
+from app.models.employee import Employee
 
 router = APIRouter()
 
@@ -41,6 +44,124 @@ def login_access_token(
         ),
         "token_type": "bearer",
     }
+
+@router.post("/signup", response_model=User)
+def signup(
+    *,
+    db: Session = Depends(get_db),
+    user_in: SignUpRequest
+) -> Any:
+    """
+    Create new user and employee profile.
+    """
+    user = user_service.get_by_username(db, username=user_in.employee_id)
+    if user:
+        raise HTTPException(
+            status_code=400,
+            detail="User with this employee ID already exists.",
+        )
+    
+    # Create User
+    from app.models.user import User as UserModel
+    from app.core.security import get_password_hash
+    
+    db_user = UserModel(
+        username=user_in.employee_id,
+        email=user_in.email,
+        hashed_password=get_password_hash(user_in.password),
+        phone_number=user_in.phone_number,
+        is_active=True
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    
+    # Create Employee Profile
+    db_employee = Employee(
+        user_id=db_user.id,
+        employee_id=user_in.employee_id,
+        name=user_in.full_name
+    )
+    db.add(db_employee)
+    db.commit()
+    
+    return db_user
+
+@router.post("/forgot-password")
+def forgot_password(
+    *,
+    db: Session = Depends(get_db),
+    request: ForgotPasswordRequest
+) -> Any:
+    """
+    Send OTP for password reset.
+    """
+    from app.models.user import User as UserModel
+    user = user_service.get_by_username(db, username=request.username_or_email)
+    if not user:
+        user = db.query(UserModel).filter(UserModel.email == request.username_or_email).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Generate 6-digit OTP
+    otp_code = f"{random.randint(100000, 999999)}"
+    
+    # Save OTP
+    db_otp = OTP(
+        user_id=user.id,
+        code=otp_code,
+        purpose=OTPPurpose.RESET
+    )
+    db.add(db_otp)
+    db.commit()
+    
+    # SIMULATION: Log to console
+    print(f"\n[OTP SIMULATION] Password reset OTP for {user.username}: {otp_code}\n")
+    
+    return {"message": "OTP sent to your registered email/phone"}
+
+@router.post("/reset-password")
+def reset_password(
+    *,
+    db: Session = Depends(get_db),
+    request: PasswordResetRequest
+) -> Any:
+    """
+    Reset password using OTP.
+    """
+    from app.models.user import User as UserModel
+    user = user_service.get_by_username(db, username=request.username_or_email)
+    if not user:
+        user = db.query(UserModel).filter(UserModel.email == request.username_or_email).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify OTP
+    # Check for latest unverified OTP within last 10 mins
+    timeout = datetime.utcnow() - timedelta(minutes=settings.OTP_EXPIRE_MINUTES)
+    db_otp = db.query(OTP).filter(
+        OTP.user_id == user.id,
+        OTP.code == request.code,
+        OTP.purpose == OTPPurpose.RESET,
+        OTP.is_verified == False,
+        OTP.created_at >= timeout
+    ).order_by(OTP.created_at.desc()).first()
+    
+    if not db_otp:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    
+    # Update password
+    from app.core.security import get_password_hash
+    user.hashed_password = get_password_hash(request.new_password)
+    db_otp.is_verified = True
+    
+    db.add(user)
+    db.add(db_otp)
+    db.commit()
+    
+    return {"message": "Password reset successful"}
 
 @router.get("/me", response_model=User)
 def read_user_me(
