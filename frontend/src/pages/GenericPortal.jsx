@@ -1,10 +1,11 @@
 import React from 'react';
 import Layout from '../components/Layout';
 import { Settings, Construction } from 'lucide-react';
+import { api } from '../api';
 
 const GenericPortal = ({ title, userRole }) => {
     return (
-        <Layout userRole={userRole || 'CMD'}>
+        <Layout userRole={userRole || api.getUserRole() || 'CMD'}>
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6">
                 <div className="w-24 h-24 bg-primary-500/10 rounded-3xl flex items-center justify-center border border-primary-500/20 animate-pulse">
                     <Construction className="w-12 h-12 text-primary-500" />

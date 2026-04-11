@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, FileText, Users, Settings, LogOut, Bell, Shield, FolderGit2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, Settings, LogOut, Bell, Shield, FolderGit2, ClipboardCheck } from 'lucide-react';
 import { api } from '../api';
 
 const Sidebar = ({ userRole }) => {
@@ -20,6 +20,7 @@ const Sidebar = ({ userRole }) => {
                 return [
                     ...commonLinks,
                     { path: '/cases/review', label: 'Pending Cases', icon: FileText },
+                    { path: '/cases/assigned', label: 'Assigned Cases', icon: ClipboardCheck },
                     { path: '/officers', label: 'Enquiry Officers', icon: Users },
                 ];
             case 'COMPLAINT_OFFICER':

@@ -19,6 +19,7 @@ const LoginPage = () => {
 
             // Get user profile to determine role
             const user = await api.getCurrentUser();
+            api.setUserRole(user.role);
             const rolePath = user.role.toLowerCase().replace(/_/g, '-');
             window.location.href = `/dashboard/${rolePath}`;
         } catch (error) {

@@ -2,11 +2,17 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 import os
 
-# Using SQLite for development parity with user's current environment
-SQLALCHEMY_DATABASE_URL = "sqlite:///./dcmts_fastapi.db"
+from app.core.security import settings
+
+# Default to SQLite only if DATABASE_URL is not set
+SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
+
+# If it's SQLite, we might need check_same_thread: False
+is_sqlite = SQLALCHEMY_DATABASE_URL.startswith("sqlite")
 
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+    SQLALCHEMY_DATABASE_URL, 
+    connect_args={"check_same_thread": False} if is_sqlite else {}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

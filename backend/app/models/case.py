@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Date, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -6,6 +6,7 @@ import enum
 
 class CaseStatus(str, enum.Enum):
     REGISTERED = "REGISTERED"
+    ASSIGNED = "ASSIGNED"
     UNDER_ENQUIRY = "UNDER_ENQUIRY"
     ENQUIRY_COMPLETED = "ENQUIRY_COMPLETED"
     ALLEGATION_NOT_PROVED = "ALLEGATION_NOT_PROVED"
@@ -27,10 +28,18 @@ class CaseStatus(str, enum.Enum):
     APPEAL_WINDOW_OPEN = "APPEAL_WINDOW_OPEN"
     APPEAL_UNDER_REVIEW = "APPEAL_UNDER_REVIEW"
     CASE_CLOSED = "CASE_CLOSED"
+    CLOSED_NOT_PROVED = "CLOSED_NOT_PROVED"
+    CLOSED_FINAL = "CLOSED_FINAL"
 
 class Gravity(str, enum.Enum):
     MINOR = "MINOR"
     MAJOR = "MAJOR"
+
+class WingType(str, enum.Enum):
+    VIGILANCE = "VIGILANCE"
+    AUDIT = "AUDIT"
+    QC = "QC"
+    AUTHORIZED_SERVICES = "AUTHORIZED_SERVICES"
 
 class Case(Base):
     __tablename__ = "case"
@@ -41,9 +50,32 @@ class Case(Base):
     gravity = Column(Enum(Gravity), default=Gravity.MINOR)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    enquiry_officer_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    enquiry_deadline = Column(Date, nullable=True)
+    assigned_wing = Column(Enum(WingType), nullable=True)
+    wing_details = Column(String, nullable=True) # For Authorized Services sub-options
+    enquiry_report_path = Column(String(255), nullable=True)
+    
+    controlling_officer_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    disciplinary_authority_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    concurrence_committee_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    appeal_authority_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    
+    show_cause_served_date = Column(Date, nullable=True)
+    show_cause_proof_path = Column(String(255), nullable=True)
+    employee_explanation_path = Column(String(255), nullable=True)
+    reminder_proof_path = Column(String(255), nullable=True)
+    final_order_proof_path = Column(String(255), nullable=True)
+    monthly_undertaking_path = Column(String(255), nullable=True)
+    appeal_path = Column(String(255), nullable=True)
 
-    complaint = relationship("Complaint", back_populates="case")
+    complaint = relationship("Complaint", back_populates="case", foreign_keys=[complaint_id])
     history = relationship("CaseHistory", back_populates="case")
+    enquiry_officer = relationship("User", foreign_keys=[enquiry_officer_id])
+    controlling_officer = relationship("User", foreign_keys=[controlling_officer_id])
+    disciplinary_authority = relationship("User", foreign_keys=[disciplinary_authority_id])
+    concurrence_committee = relationship("User", foreign_keys=[concurrence_committee_id])
+    appeal_authority = relationship("User", foreign_keys=[appeal_authority_id])
 
 class CaseHistory(Base):
     __tablename__ = "case_history"

@@ -17,9 +17,12 @@ import CCDashboard from './pages/dashboards/CCDashboard';
 import AADashboard from './pages/dashboards/AADashboard';
 import CircleHeadDashboard from './pages/dashboards/CircleHeadDashboard';
 import GMDashboard from './pages/dashboards/GMDashboard';
+import EnquiryOfficersPortal from './pages/dashboards/EnquiryOfficersPortal';
+import AssignedCases from './pages/dashboards/AssignedCases';
 
-// Feature imports
 import ComplaintForm from './pages/complaints/ComplaintForm';
+import CMDComplaintDetail from './pages/complaints/CMDComplaintDetail';
+import AllComplaints from './pages/complaints/AllComplaints';
 import GenericPortal from './pages/GenericPortal';
 
 function App() {
@@ -45,10 +48,12 @@ function App() {
 
         {/* Feature Routes */}
         <Route path="/complaints/new" element={<ComplaintForm />} />
-        <Route path="/complaints" element={<GenericPortal title="All Complaints" userRole="COMPLAINT_OFFICER" />} />
+        <Route path="/complaints/cmd/:id" element={<CMDComplaintDetail />} />
+        <Route path="/complaints" element={<AllComplaints />} />
 
+        <Route path="/cases/assigned" element={<AssignedCases />} />
         <Route path="/cases/review" element={<GenericPortal title="Pending Cases Review" userRole="CMD" />} />
-        <Route path="/officers" element={<GenericPortal title="Enquiry Officers" userRole="CMD" />} />
+        <Route path="/officers" element={<EnquiryOfficersPortal />} />
 
         <Route path="/cases/active" element={<GenericPortal title="Active Enquiries" userRole="DA" />} />
         <Route path="/orders/pending" element={<GenericPortal title="Pending Orders" userRole="DA" />} />

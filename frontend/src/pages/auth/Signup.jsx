@@ -34,8 +34,17 @@ const SignupPage = () => {
                 phone_number: formData.phone_number,
                 password: formData.password
             });
-            alert("Registration successful! Please login.");
-            window.location.href = '/login';
+            
+            // Automatic Login after successful signup
+            const loginData = await api.login(formData.employee_id, formData.password);
+            api.setToken(loginData.access_token);
+
+            // Get user profile to determine role and redirect
+            const user = await api.getCurrentUser();
+            api.setUserRole(user.role);
+            
+            const rolePath = user.role.toLowerCase().replace(/_/g, '-');
+            window.location.href = `/dashboard/${rolePath}`;
         } catch (error) {
             alert(error.message || 'Registration failed');
         } finally {

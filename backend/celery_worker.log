@@ -1,0 +1,26 @@
+nohup: ignoring input
+ 
+ -------------- celery@soumya-ranjan-Latitude-7490 v5.6.2 (recovery)
+--- ***** ----- 
+-- ******* ---- Linux-6.17.0-14-generic-x86_64-with-glibc2.39 2026-03-19 21:08:47
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         dcmts_worker:0x7df348976840
+- ** ---------- .> transport:   redis://localhost:6379/0
+- ** ---------- .> results:     redis://localhost:6379/0
+- *** --- * --- .> concurrency: 8 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
+[tasks]
+  . app.tasks.celery.dummy_task
+
+[2026-03-19 21:08:48,415: INFO/MainProcess] Connected to redis://localhost:6379/0
+[2026-03-19 21:08:48,422: INFO/MainProcess] mingle: searching for neighbors
+[2026-03-19 21:08:49,441: INFO/MainProcess] mingle: all alone
+[2026-03-19 21:08:49,490: INFO/MainProcess] celery@soumya-ranjan-Latitude-7490 ready.
+
+worker: Warm shutdown (MainProcess)

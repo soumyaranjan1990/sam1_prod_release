@@ -42,3 +42,15 @@ def read_employees(
     """
     employees = db.query(EmployeeModel).offset(skip).limit(limit).all()
     return employees
+@router.get("/{id}", response_model=Employee)
+def read_employee(
+    id: int,
+    db: Session = Depends(get_db),
+) -> Any:
+    """
+    Get employee by ID.
+    """
+    db_obj = db.query(EmployeeModel).filter(EmployeeModel.id == id).first()
+    if not db_obj:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return db_obj

@@ -1,7 +1,28 @@
 // API base URL - adjust if necessary
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+const getBaseApiUrl = () => {
+    if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+    // In local dev, use Vite proxy to avoid cross-origin/network host issues.
+    if (import.meta.env.DEV) return '/api/v1';
+    const hostname = window.location.hostname || '127.0.0.1';
+    return `http://${hostname}:8000/api/v1`;
+};
+
+const API_URL = getBaseApiUrl();
+const BASE_URL = API_URL.replace('/api/v1', '');
+
+const parseJsonSafe = async (response) => {
+    const text = await response.text();
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return { message: text };
+    }
+};
 
 export const api = {
+    baseURL: API_URL,
+    rootURL: BASE_URL,
     // Login method for authentication
     login: async (username, password) => {
         const formData = new URLSearchParams();
@@ -17,11 +38,11 @@ export const api = {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Login failed');
+            const error = await parseJsonSafe(response);
+            throw new Error(error?.detail || error?.message || 'Login failed');
         }
 
-        const data = await response.json();
+        const data = await parseJsonSafe(response);
         return data;
     },
 
@@ -35,42 +56,65 @@ export const api = {
         localStorage.setItem('token', token);
     },
 
-    // Helper auth method to clear token
+    // Helper auth method to clear token and role
     clearToken: () => {
         localStorage.removeItem('token');
+        localStorage.removeItem('userRole');
     },
 
     // Generic authenticated fetch
     fetchWithAuth: async (endpoint, options = {}) => {
         const token = api.getToken();
+        
+        // Ensure endpoint starts with / and API_URL doesn't end with /
+        const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        const baseUrl = API_URL.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
+        const url = `${baseUrl}${cleanEndpoint}`;
 
-        const headers = {
-            'Content-Type': 'application/json',
-            ...options.headers,
-        };
+        const headers = { ...options.headers };
+
+        // Only set Content-Type if not FormData (browser sets it with boundary for FormData)
+        if (!(options.body instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+        }
 
         if (token) {
             headers['Authorization'] = `Bearer ${token}`;
         }
 
-        const response = await fetch(`${API_URL}${endpoint}`, {
+        const response = await fetch(url, {
             ...options,
             headers,
         });
 
         if (response.status === 401) {
-            // Handle unauthorized
             api.clearToken();
             window.location.href = '/login';
             throw new Error('Unauthorized');
         }
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Request failed');
+            let errorDetail = 'Request failed';
+            try {
+                const error = await parseJsonSafe(response);
+                errorDetail = error?.detail || error?.message || errorDetail;
+            } catch (e) {
+                errorDetail = `${response.status} ${response.statusText}`;
+            }
+            throw new Error(errorDetail);
         }
 
-        return response.json();
+        return parseJsonSafe(response);
+    },
+
+    // Standardized upload method
+    uploadFile: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        return api.fetchWithAuth('/complaints/upload', {
+            method: 'POST',
+            body: formData,
+        });
     },
 
     // Get current user details
@@ -89,11 +133,11 @@ export const api = {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Signup failed');
+            const error = await parseJsonSafe(response);
+            throw new Error(error?.detail || error?.message || 'Signup failed');
         }
 
-        return response.json();
+        return parseJsonSafe(response);
     },
 
     // Forgot password method
@@ -107,11 +151,11 @@ export const api = {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to send OTP');
+            const error = await parseJsonSafe(response);
+            throw new Error(error?.detail || error?.message || 'Failed to send OTP');
         }
 
-        return response.json();
+        return parseJsonSafe(response);
     },
 
     // Reset password method
@@ -125,10 +169,33 @@ export const api = {
         });
 
         if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Password reset failed');
+            const error = await parseJsonSafe(response);
+            throw new Error(error?.detail || error?.message || 'Password reset failed');
         }
 
-        return response.json();
+        return parseJsonSafe(response);
+    },
+
+    // Get assigned role
+    getUserRole: () => {
+        return localStorage.getItem('userRole');
+    },
+
+    // Set assigned role
+    setUserRole: (role) => {
+        localStorage.setItem('userRole', role);
+    },
+
+    // Get all cases or filtered by EO
+    getCases: async () => {
+        return api.fetchWithAuth('/cases/');
+    },
+
+    // Submit Enquiry Action
+    submitEnquiryAction: async (caseId, data) => {
+        return api.fetchWithAuth(`/cases/${caseId}/enquiry-action`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
     }
 };

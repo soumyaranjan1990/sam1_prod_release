@@ -49,6 +49,10 @@ class Complaint(Base):
     circle_id = Column(Integer, ForeignKey("circle.id"), nullable=True)
     department = Column(String(100), nullable=True)
     date_of_receipt = Column(Date, server_default=func.current_date())
+    complainant_name = Column(String(255), nullable=True)
+    complainant_type = Column(String(100), nullable=True) # Consumer, Employee, etc.
+    complainant_employee_id = Column(Integer, ForeignKey("employee.id"), nullable=True)
+    
     document_path = Column(String(255), nullable=True) # Moving from FileField to path
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
@@ -56,3 +60,15 @@ class Complaint(Base):
     circle = relationship("Circle", back_populates="complaints")
     case = relationship("Case", back_populates="complaint", uselist=False)
     employees = relationship("ComplaintEmployee", back_populates="complaint")
+
+    @property
+    def status(self):
+        if self.case:
+            return self.case.status
+        return "REGISTERED"
+
+    @property
+    def updated_at(self):
+        if self.case and self.case.updated_at:
+            return self.case.updated_at
+        return self.created_at

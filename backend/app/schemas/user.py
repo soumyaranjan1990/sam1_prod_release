@@ -34,8 +34,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+from typing import Optional, Union
+...
 class TokenPayload(BaseModel):
-    sub: Optional[int] = None
+    sub: Optional[Union[int, str]] = None
 
 class LoginRequest(BaseModel):
     username: str

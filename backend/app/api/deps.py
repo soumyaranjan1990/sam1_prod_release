@@ -28,12 +28,17 @@ def get_current_user(
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         token_data = TokenPayload(**payload)
-    except (JWTError, ValidationError):
+    except (JWTError, ValidationError) as e:
+        print(f"[AUTH ERROR] Token validation failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
         )
-    user = user_service.get(db, id=token_data.sub)
+    
+    # sub can be a string in the JWT, convert to int for the DB lookup
+    user_id = int(token_data.sub) if token_data.sub is not None else None
+    user = user_service.get(db, id=user_id)
     if not user:
+        print(f"[AUTH ERROR] User not found for ID: {user_id}")
         raise HTTPException(status_code=404, detail="User not found")
     return user

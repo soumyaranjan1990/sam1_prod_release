@@ -54,13 +54,39 @@ def signup(
     """
     Create new user and employee profile.
     """
-    user = user_service.get_by_username(db, username=user_in.employee_id)
-    if user:
+    # Check if Employee record exists
+    existing_employee = db.query(Employee).filter(Employee.employee_id == user_in.employee_id).first()
+    if existing_employee and existing_employee.user_id:
         raise HTTPException(
             status_code=400,
-            detail="User with this employee ID already exists.",
+            detail="Employee ID already linked to another account."
         )
-    
+
+    # Determine role based on designation if it exists
+    from app.models.user import UserRole
+    user_role = UserRole.EMPLOYEE
+
+    if existing_employee and existing_employee.designation:
+        title = existing_employee.designation.title.upper()
+        if "CMD" in title:
+            user_role = UserRole.CMD
+        elif "ENQUIRY OFFICER" in title or "EO" in title:
+            user_role = UserRole.ENQUIRY_OFFICER
+        elif "COMPLAINT OFFICER" in title or "CMT" in title:
+            user_role = UserRole.COMPLAINT_OFFICER
+        elif "DISCIPLINARY AUTHORITY" in title or "DA" in title:
+            user_role = UserRole.DA
+        elif "CONTROLLING OFFICER" in title or "CO" in title:
+            user_role = UserRole.CO
+        elif "CIRCLE HEAD" in title:
+            user_role = UserRole.CIRCLE_HEAD
+        elif "GM" in title or "GENERAL MANAGER" in title:
+            user_role = UserRole.GM
+        elif "CONCURRENCE" in title:
+            user_role = UserRole.CONCURRENCE_COMMITTEE
+        elif "APPEAL" in title:
+            user_role = UserRole.APPEAL_AUTHORITY
+
     # Create User
     from app.models.user import User as UserModel
     from app.core.security import get_password_hash
@@ -70,20 +96,27 @@ def signup(
         email=user_in.email,
         hashed_password=get_password_hash(user_in.password),
         phone_number=user_in.phone_number,
+        role=user_role,
         is_active=True
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
     
-    # Create Employee Profile
-    db_employee = Employee(
-        user_id=db_user.id,
-        employee_id=user_in.employee_id,
-        name=user_in.full_name
-    )
-    db.add(db_employee)
-    db.commit()
+    if existing_employee:
+        # Link existing employee record
+        existing_employee.user_id = db_user.id
+        db.add(existing_employee)
+        db.commit()
+    else:
+        # Create New Employee Profile (defaults to EMPLOYEE role as no designation yet)
+        db_employee = Employee(
+            user_id=db_user.id,
+            employee_id=user_in.employee_id,
+            name=user_in.full_name
+        )
+        db.add(db_employee)
+        db.commit()
     
     return db_user
 
@@ -167,8 +200,24 @@ def reset_password(
 def read_user_me(
     current_user: Any = Depends(get_current_user),
 ) -> Any:
-    """
-    Get current user.
-    """
+    """Get current user."""
     return current_user
 
+
+@router.get("/users/")
+def list_users(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+) -> Any:
+    """List all users (for CMD to pick Enquiry Officers)."""
+    from app.models.user import User as UserModel
+    users = db.query(UserModel).filter(UserModel.is_active == True).all()
+    return [
+        {
+            "id": u.id,
+            "username": u.username,
+            "email": u.email,
+            "role": u.role,
+        }
+        for u in users
+    ]

@@ -2,18 +2,23 @@ from datetime import datetime, timedelta
 from typing import Any, Union
 from jose import jwt
 from passlib.context import CryptContext
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+import os
 
 class Settings(BaseSettings):
     SECRET_KEY: str = "your-secret-key-keep-it-safe" # Should be in .env
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    DATABASE_URL: str = "sqlite:///./sql_app.db"
     
     # OTP Settings
     OTP_EXPIRE_MINUTES: int = 10
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=os.path.join(os.path.dirname(__file__), "../../../.env"),
+        extra="ignore"
+    )
 
 settings = Settings()
 
@@ -29,7 +34,9 @@ def create_access_token(subject: Union[str, Any], expires_delta: timedelta = Non
     return encoded_jwt
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    # Ensure plain text is correctly handled by passlib (truncate/encode)
+    # The new passlib/bcrypt versions have an issue with strings > 72 chars
+    return pwd_context.verify(plain_password[:72], hashed_password)
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(password[:72])
