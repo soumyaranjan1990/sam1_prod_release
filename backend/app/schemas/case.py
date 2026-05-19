@@ -43,6 +43,8 @@ class Complaint(ComplaintBase):
     updated_at: datetime
     status: Optional[CaseStatus] = None # Pulls from model property
     complainant_employee_id: Optional[int] = None
+    case_id: Optional[int] = None
+    case: Optional["Case"] = None
     
     # Use the 'employees' relationship from the model
     employees: List[EmployeeAssociation] = []
@@ -50,7 +52,27 @@ class Complaint(ComplaintBase):
     class Config:
         from_attributes = True
 
+class ComplaintInCase(ComplaintBase):
+    id: int
+    complaint_id: str
+    file_number: str
+    registered_by_id: int
+    department: Optional[str] = None
+    date_of_receipt: Optional[date] = None
+    document_path: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    status: Optional[CaseStatus] = None 
+    complainant_employee_id: Optional[int] = None
+    case_id: Optional[int] = None
+    # 'case' field removed to prevent recursion
+    employees: List[EmployeeAssociation] = []
+
+    class Config:
+        from_attributes = True
+
 class ComplaintStats(BaseModel):
+    total: int
     unassigned: int
     active: int
     pending: int
@@ -104,9 +126,12 @@ class Case(CaseBase):
     monthly_undertaking_path: Optional[str] = None
     appeal_path: Optional[str] = None
     disciplinary_authority_id: Optional[int] = None
+    window_start_date: Optional[datetime] = None
+    cc_modified_details: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime]
     history: List[CaseHistory] = []
+    complaint: Optional[ComplaintInCase] = None
 
     class Config:
         from_attributes = True
@@ -124,6 +149,7 @@ class CaseCOAction(BaseModel):
     action_type: str
     served_date: date
     proof_path: Optional[str] = None
+    explanation_path: Optional[str] = None
     monthly_undertaking_path: Optional[str] = None
 
 class CaseEmployeeResponse(BaseModel):
@@ -138,3 +164,9 @@ class CaseCCAction(BaseModel):
     verdict: str # "CONCUR" or "MODIFY"
     modified_punishment: Optional[str] = None
     comments: Optional[str] = None
+
+class CaseCMDSettle(BaseModel):
+    comments: Optional[str] = None
+    final_punishment_details: Optional[str] = None
+
+Complaint.model_rebuild()

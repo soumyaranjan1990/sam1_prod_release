@@ -147,44 +147,61 @@ const EnquiryOfficerDashboard = () => {
                                         <th className="px-6 py-4 font-bold">Case ID</th>
                                         <th className="px-6 py-4 font-bold">Status</th>
                                         <th className="px-6 py-4 font-bold">Assigned Wing</th>
+                                        <th className="px-6 py-4 font-bold">Enquiry Deadline</th>
                                         <th className="px-6 py-4 font-bold">Created</th>
                                         <th className="px-6 py-4 font-bold text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
-                                    {cases.map((c) => (
-                                        <tr key={c.id} className="hover:bg-slate-800/10 transition-colors group">
-                                            <td className="px-6 py-4 font-medium text-white">CASE-{c.id}</td>
-                                            <td className="px-6 py-4">
-                                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
-                                                    ['ASSIGNED', 'UNDER_ENQUIRY'].includes(c.status) ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
-                                                    c.status === 'ALLEGATION_PROVED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                                                    c.status === 'CLOSED_NOT_PROVED' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
-                                                    'bg-slate-500/10 text-slate-400 border border-slate-500/20'
-                                                }`}>
-                                                    {c.status.replace(/_/g, ' ')}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 text-slate-400 text-sm">
-                                                {c.assigned_wing} {c.wing_details && `(${c.wing_details})`}
-                                            </td>
-                                            <td className="px-6 py-4 text-slate-500 text-sm">
-                                                {new Date(c.created_at).toLocaleDateString()}
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                {['ASSIGNED', 'UNDER_ENQUIRY'].includes(c.status) ? (
-                                                    <button 
-                                                        onClick={() => handleActionClick(c)}
-                                                        className="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ml-auto"
-                                                    >
-                                                        Review <ExternalLink className="w-4 h-4" />
-                                                    </button>
-                                                ) : (
-                                                    <span className="text-slate-600 italic text-xs">Action Taken</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {cases.map((c) => {
+                                        const isOverdue = c.enquiry_deadline && new Date(c.enquiry_deadline) < new Date() && ['ASSIGNED', 'UNDER_ENQUIRY'].includes(c.status);
+                                        
+                                        return (
+                                            <tr key={c.id} className="hover:bg-slate-800/10 transition-colors group">
+                                                <td className="px-6 py-4 font-medium text-white">CASE-{c.id}</td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${
+                                                        ['ASSIGNED', 'UNDER_ENQUIRY'].includes(c.status) ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
+                                                        c.status === 'ALLEGATION_PROVED' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                                        c.status === 'CLOSED_NOT_PROVED' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+                                                        'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                                                    }`}>
+                                                        {c.status.replace(/_/g, ' ')}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-400 text-sm">
+                                                    {c.assigned_wing} {c.wing_details && `(${c.wing_details})`}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {c.enquiry_deadline ? (
+                                                        <div className="flex flex-col">
+                                                            <span className={`text-sm font-bold ${isOverdue ? 'text-red-400' : 'text-slate-200'}`}>
+                                                                {new Date(c.enquiry_deadline).toLocaleDateString()}
+                                                            </span>
+                                                            {isOverdue && <span className="text-[10px] text-red-500 font-black uppercase tracking-tighter">Overdue</span>}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-slate-600 italic text-xs">No deadline set</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-500 text-sm">
+                                                    {new Date(c.created_at).toLocaleDateString()}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    {['ASSIGNED', 'UNDER_ENQUIRY'].includes(c.status) ? (
+                                                        <button 
+                                                            onClick={() => handleActionClick(c)}
+                                                            className="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ml-auto"
+                                                        >
+                                                            Review <ExternalLink className="w-4 h-4" />
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-slate-600 italic text-xs">Action Taken</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

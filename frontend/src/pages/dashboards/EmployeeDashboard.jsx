@@ -139,10 +139,9 @@ const EmployeeDashboard = () => {
                                 const isAppealWindow = caseStatus === 'APPEAL_WINDOW_OPEN';
                                 
                                 let daysLeft = null;
-                                if (needsExplanation && c.case.show_cause_served_date) {
-                                    daysLeft = calculateDaysLeft(c.case.show_cause_served_date, 15);
-                                } else if (isAppealWindow && c.case.updated_at) {
-                                    daysLeft = calculateDaysLeft(c.case.updated_at, 90);
+                                if (c.case?.window_start_date) {
+                                    const windowSize = isAppealWindow ? 90 : (caseStatus === 'FINAL_OPPORTUNITY_SENT' ? 7 : 15);
+                                    daysLeft = calculateDaysLeft(c.case.window_start_date, windowSize);
                                 }
 
                                 return (

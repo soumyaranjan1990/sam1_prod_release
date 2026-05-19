@@ -22,7 +22,7 @@ services:
       - "8000:8000"
     environment:
       - DEBUG=True
-      - DATABASE_URL=postgresql://dcm_user:dcm_password@db:5432/dcm_db
+      - DATABASE_URL=sqlite:////app/dcmts_fastapi.db
     depends_on:
       - db
       - redis
@@ -45,7 +45,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql://dcm_user:dcm_password@db:5432/dcm_db
+      - DATABASE_URL=sqlite:////app/dcmts_fastapi.db
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
@@ -58,7 +58,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql://dcm_user:dcm_password@db:5432/dcm_db
+      - DATABASE_URL=sqlite:////app/dcmts_fastapi.db
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:

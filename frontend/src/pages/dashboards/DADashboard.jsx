@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
-import { FileText, Gavel, AlertTriangle, ChevronRight, CheckCircle2, ShieldCheck, Clock, Send, X, ExternalLink } from 'lucide-react';
+import { FileText, Gavel, AlertTriangle, ChevronRight, CheckCircle2, ShieldCheck, Clock, Send, X, ExternalLink, Bell } from 'lucide-react';
 import { api } from '../../api';
 
 const DADashboard = () => {
@@ -28,6 +28,12 @@ const DADashboard = () => {
     };
 
     const handleActionClick = (c) => {
+        // Restriction: If DA has issued notice but CO hasn't served it yet
+        if (c.status === 'SHOW_CAUSE_ISSUED') {
+            alert("Administrative Notice has already been issued for this case. \n\nPlease wait for the Controlling Officer to serve the notice and upload proof of service.");
+            return;
+        }
+
         setSelectedCase(c);
         setIsModalOpen(true);
         setActionType('');
@@ -51,17 +57,24 @@ const DADashboard = () => {
         }
     };
 
-    const daActiveCases = cases.filter(c => [
-        'ALLEGATION_PROVED', 
-        'AWAITING_EMPLOYEE_RESPONSE', 
-        'REMINDER_1_SENT', 
-        'REMINDER_2_SENT', 
+    // Forward flow: EO report → DA (Cases Under Control)
+    // Cases Under Control = brand new cases DA must act on (issue show-cause)
+    const forwardFlowCases = cases.filter(c => c.status === 'ALLEGATION_PROVED');
+
+    // Pending Orders = DA already issued notice, waiting for employee/CC response
+    const pendingOrderCases = cases.filter(c => [
+        'SHOW_CAUSE_ISSUED',
+        'AWAITING_EMPLOYEE_RESPONSE',
+        'REMINDER_1_SENT',
+        'REMINDER_2_SENT',
         'FINAL_OPPORTUNITY_SENT',
+        'EXPLANATION_RECEIVED',
         'FINAL_ORDER_ISSUED_CONCURRED',
         'FINAL_ORDER_ISSUED_MODIFIED'
     ].includes(c.status));
 
-    const needsAttentionCount = daActiveCases.length;
+    // Backward flow: CO submits explanation → shown ONLY in Pending Explanations tab (sidebar link)
+    const needsAttentionCount = forwardFlowCases.length + pendingOrderCases.length;
 
     const getAvailableActions = (c) => {
         const actions = [];
@@ -69,11 +82,11 @@ const DADashboard = () => {
             actions.push({ id: 'ISSUE_SHOW_CAUSE', label: 'Issue Show-Cause Notice' });
         }
         
-        const hasExplanation = !!c.employee_explanation_path;
+        const hasExplanation = !!c.employee_explanation_path || c.status === 'UNDER_DA_REVIEW_MAJOR';
         
         if (hasExplanation) {
-            if (c.gravity === 'MAJOR' && !['FINAL_ORDER_ISSUED_CONCURRED', 'FINAL_ORDER_ISSUED_MODIFIED'].includes(c.status)) {
-                actions.push({ id: 'SEND_TO_CC', label: 'Send to Concurrence Committee' });
+            if (c.gravity === 'MAJOR' && !['FINAL_ORDER_ISSUED_CONCURRED', 'FINAL_ORDER_ISSUED_MODIFIED', 'REFERRED_TO_CMD_BY_CC'].includes(c.status)) {
+                actions.push({ id: 'SEND_TO_CC', label: 'Pass to Concurrence Committee' });
             } else {
                 actions.push({ id: 'ISSUE_FINAL_ORDER', label: 'Issue Final Order' });
             }
@@ -113,10 +126,38 @@ const DADashboard = () => {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="md:col-span-2 bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex items-start gap-4 border-l-4 border-l-rose-500">
+                        <div className="p-3 bg-red-500/10 text-red-500 rounded-xl"><Bell className="w-6 h-6" /></div>
+                        <div className="flex-1">
+                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">New EO Reports</h3>
+                            <div className="space-y-3">
+                                {forwardFlowCases.filter(c => c.status === 'ALLEGATION_PROVED').length > 0 ? (
+                                    forwardFlowCases.filter(c => c.status === 'ALLEGATION_PROVED').map(c => (
+                                        <div key={c.id} className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-slate-800">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-2 h-2 rounded-full animate-pulse bg-blue-500" />
+                                                <span className="text-sm font-medium text-white">
+                                                    Enquiry Report Ready — Case #{c.id}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => handleActionClick(c)}
+                                                className="text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-widest"
+                                            >
+                                                Take Action
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-slate-500 text-sm italic">No new EO reports at this time.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                     <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex items-start gap-4">
                         <div className="p-3 bg-red-500/10 text-red-400 rounded-xl"><AlertTriangle className="w-6 h-6" /></div>
                         <div>
-                            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Active Proceedings</h3>
+                            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Active Cases</h3>
                             <p className="text-4xl font-black text-white">{needsAttentionCount}</p>
                         </div>
                     </div>
@@ -124,15 +165,19 @@ const DADashboard = () => {
 
                 <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden min-h-[400px]">
                     <div className="p-6 border-b border-slate-800 bg-slate-800/20 flex justify-between items-center">
-                        <h3 className="text-xl font-bold text-white">Cases Under Control</h3>
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Cases Under Control</h3>
+                            <p className="text-slate-500 text-xs mt-1">Forward flow — EO enquiry reports assigned to you. Explanations from CO are in <span className="text-rose-400 font-semibold">Pending Explanations</span>.</p>
+                        </div>
+                        <span className="bg-blue-500/10 text-blue-400 text-xs font-bold px-2 py-1 rounded-full border border-blue-500/20">{forwardFlowCases.length} active</span>
                     </div>
                     
                     {loading ? (
                         <div className="p-20 flex justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-rose-500 border-t-transparent"></div></div>
-                    ) : daActiveCases.length === 0 ? (
+                    ) : forwardFlowCases.length === 0 ? (
                         <div className="p-20 flex flex-col items-center justify-center text-slate-500 gap-3">
                             <ShieldCheck className="w-12 h-12 opacity-20" />
-                            <p>No actions required at this time.</p>
+                            <p>No EO report cases assigned to you yet.</p>
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -141,26 +186,102 @@ const DADashboard = () => {
                                     <tr className="bg-slate-900/30 text-slate-400 text-xs uppercase tracking-widest border-b border-slate-800">
                                         <th className="px-6 py-4 font-bold">Case ID</th>
                                         <th className="px-6 py-4 font-bold">Status</th>
-                                        <th className="px-6 py-4 font-bold">Employee Explanation</th>
+                                        <th className="px-6 py-4 font-bold">Enquiry Report</th>
                                         <th className="px-6 py-4 font-bold text-right">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800/50">
-                                    {daActiveCases.map((c) => (
+                                    {forwardFlowCases.map((c) => (
                                         <tr key={c.id} className="hover:bg-slate-800/30 transition-colors">
                                             <td className="px-6 py-5 font-mono text-white font-bold">CASE-{c.id}</td>
                                             <td className="px-6 py-5">
                                                 <span className={`px-2 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border ${
                                                     c.status.includes('REMINDER') ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 
                                                     c.status === 'ALLEGATION_PROVED' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 
+                                                    c.status === 'UNDER_DA_REVIEW_MAJOR' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
                                                     'bg-blue-500/10 text-blue-400 border-blue-500/20'
                                                 }`}>
                                                     {c.status.replace(/_/g, ' ')}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-5">
+                                                {c.enquiry_report_path ? (
+                                                    <a href={`${api.rootURL}/${c.enquiry_report_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors text-xs font-bold">
+                                                        <FileText className="w-3.5 h-3.5" /> View Enquiry Report
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-500 italic text-sm">Not Available</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-5 text-right">
+                                                <div className="flex gap-2 justify-end">
+                                                    <button 
+                                                        onClick={() => handleActionClick(c)}
+                                                        className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold border border-slate-700 transition-all focus:outline-none"
+                                                    >
+                                                        Manage Case <ChevronRight className="w-4 h-4 text-slate-400" />
+                                                    </button>
+                                                    {c.employee_explanation_path && c.status === 'UNDER_DA_REVIEW_MAJOR' && (
+                                                        <button
+                                                            onClick={() => { setSelectedCase(c); setIsModalOpen(true); setActionType('SEND_TO_CC'); setComments(''); }}
+                                                            className="inline-flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-xl text-sm font-bold border border-purple-700 transition-all focus:outline-none"
+                                                        >
+                                                            Review & Send to CC
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+
+                {/* Pending Orders Section */}
+                <div className="bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden">
+                    <div className="p-6 border-b border-slate-800 bg-amber-500/5 flex justify-between items-center">
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Pending Orders</h3>
+                            <p className="text-slate-500 text-xs mt-1">Cases where a notice has been issued — awaiting employee response or final resolution.</p>
+                        </div>
+                        <span className="bg-amber-500/10 text-amber-400 text-xs font-bold px-2 py-1 rounded-full border border-amber-500/20">{pendingOrderCases.length} pending</span>
+                    </div>
+                    {pendingOrderCases.length === 0 ? (
+                        <div className="p-12 flex flex-col items-center justify-center text-slate-500 gap-3">
+                            <ShieldCheck className="w-10 h-10 opacity-20" />
+                            <p className="text-sm italic">No pending orders at this time.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-900/30 text-slate-400 text-xs uppercase tracking-widest border-b border-slate-800">
+                                        <th className="px-6 py-4 font-bold">Case ID</th>
+                                        <th className="px-6 py-4 font-bold">Current Status</th>
+                                        <th className="px-6 py-4 font-bold">Employee Explanation</th>
+                                        <th className="px-6 py-4 font-bold text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/50">
+                                    {pendingOrderCases.map((c) => (
+                                        <tr key={c.id} className="hover:bg-slate-800/30 transition-colors">
+                                            <td className="px-6 py-5 font-mono text-white font-bold">CASE-{c.id}</td>
+                                            <td className="px-6 py-5">
+                                                <span className={`px-2 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider border ${
+                                                    c.status.includes('REMINDER') ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                                    c.status === 'SHOW_CAUSE_ISSUED' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                    c.status === 'AWAITING_EMPLOYEE_RESPONSE' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                                                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                }`}>
+                                                    {c.status.replace(/_/g, ' ')}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-5">
                                                 {c.employee_explanation_path ? (
-                                                    <a href={`${api.rootURL}/${c.employee_explanation_path}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors text-xs font-bold">
+                                                    <a href={`${api.rootURL}/${c.employee_explanation_path}`} target="_blank" rel="noreferrer"
+                                                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors text-xs font-bold">
                                                         <FileText className="w-3.5 h-3.5" /> View Explanation
                                                     </a>
                                                 ) : (
@@ -168,11 +289,10 @@ const DADashboard = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-5 text-right">
-                                                <button 
+                                                <button
                                                     onClick={() => handleActionClick(c)}
-                                                    className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold border border-slate-700 transition-all focus:outline-none"
-                                                >
-                                                    Manage Case <ChevronRight className="w-4 h-4 text-slate-400" />
+                                                    className="inline-flex items-center gap-2 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold border border-slate-700 transition-all">
+                                                    Manage <ChevronRight className="w-4 h-4 text-slate-400" />
                                                 </button>
                                             </td>
                                         </tr>

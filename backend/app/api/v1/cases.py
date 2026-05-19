@@ -2,10 +2,12 @@ from typing import Any, List
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import or_, and_
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from app.db.session import get_db
-from app.schemas.case import CaseCreate, Case, CaseAssign, CaseEnquiryAction, CaseCOAction, CaseEmployeeResponse, CaseDAAction, CaseCCAction
+from app.schemas.case import CaseCreate, Case, CaseAssign, CaseEnquiryAction, CaseCOAction, CaseEmployeeResponse, CaseDAAction, CaseCCAction, CaseCMDSettle
 from app.services.case import case as case_service
 from app.models.case import Case as CaseModel, CaseStatus, CaseHistory, Gravity
 from app.models.notification import Notification
@@ -33,7 +35,8 @@ def read_cases(
     limit: int = 100,
 ) -> Any:
     """Retrieve cases with role-based filtering."""
-    query = db.query(CaseModel)
+    from sqlalchemy.orm import joinedload
+    query = db.query(CaseModel).options(joinedload(CaseModel.complaint))
     
     # Apply filtering based on role
     if current_user.role == UserRole.CMD:
@@ -46,15 +49,54 @@ def read_cases(
         from app.models.complaint import Complaint
         query = query.join(Complaint).filter(Complaint.registered_by_id == current_user.id)
     elif current_user.role == UserRole.DA:
-        query = query.filter(CaseModel.disciplinary_authority_id == current_user.id)
+        query = query.filter(
+            or_(
+                CaseModel.disciplinary_authority_id == current_user.id,
+                and_(
+                    CaseModel.disciplinary_authority_id == None,
+                    CaseModel.status.in_([
+                        CaseStatus.ALLEGATION_PROVED,
+                        CaseStatus.UNDER_DA_REVIEW_MAJOR
+                    ])
+                )
+            )
+        )
     elif current_user.role == UserRole.CO:
-        query = query.filter(CaseModel.controlling_officer_id == current_user.id)
-    elif current_user.role in [UserRole.CIRCLE_HEAD, UserRole.GM]:
-        # These roles might see more, but for now isolation as requested
-        # If they aren't assigned to specific cases, they won't see much.
-        pass
+        query = query.filter(
+            or_(
+                CaseModel.controlling_officer_id == current_user.id,
+                and_(
+                    CaseModel.controlling_officer_id == None,
+                    CaseModel.status.in_([
+                        CaseStatus.SHOW_CAUSE_ISSUED,
+                        CaseStatus.REMINDER_1_SENT,
+                        CaseStatus.REMINDER_2_SENT,
+                        CaseStatus.FINAL_OPPORTUNITY_SENT,
+                        CaseStatus.EXPLANATION_RECEIVED,
+                        CaseStatus.DISCIPLINARY_ORDER_PENDING,
+                        CaseStatus.FINAL_ORDER_ISSUED_CONCURRED,
+                        CaseStatus.FINAL_ORDER_ISSUED_MODIFIED,
+                        CaseStatus.FINAL_ORDER_ISSUED_EX_PARTE
+                    ])
+                )
+            )
+        )
     
-    return query.offset(skip).limit(limit).all()
+    results = query.offset(skip).limit(limit).all()
+    return results
+
+
+@router.get("/{case_id}", response_model=Case)
+def read_case(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """Get a specific case by ID."""
+    case = db.query(CaseModel).filter(CaseModel.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return case
 
 
 @router.patch("/{case_id}/assign")
@@ -207,18 +249,43 @@ def co_action(
         case.show_cause_proof_path = action.proof_path
         case.show_cause_served_date = action.served_date
         case.status = CaseStatus.AWAITING_EMPLOYEE_RESPONSE
+        case.window_start_date = func.now()
     elif action.action_type == "SERVE_REMINDER_1":
         case.reminder_proof_path = action.proof_path
         case.status = CaseStatus.REMINDER_1_SENT
+        case.window_start_date = func.now()
     elif action.action_type == "SERVE_REMINDER_2":
         case.reminder_proof_path = action.proof_path
         case.status = CaseStatus.REMINDER_2_SENT
+        case.window_start_date = func.now()
     elif action.action_type == "SERVE_FINAL_OPPORTUNITY":
         case.reminder_proof_path = action.proof_path
         case.status = CaseStatus.FINAL_OPPORTUNITY_SENT
+        case.window_start_date = func.now()
+    elif action.action_type == "SUBMIT_EXPLANATION":
+        case.employee_explanation_path = action.explanation_path
+        # Use EXPLANATION_RECEIVED for Minor cases (hits DA overview dashboard)
+        # Use UNDER_DA_REVIEW_MAJOR for Major cases (hits DA Pending Explanations tab)
+        if case.gravity == "MAJOR":
+            case.status = CaseStatus.UNDER_DA_REVIEW_MAJOR
+        else:
+            case.status = CaseStatus.EXPLANATION_RECEIVED
+        case.window_start_date = None # Window stops
+        
+        # Notify DA
+        if case.disciplinary_authority_id:
+            complaint = case.complaint
+            file_number = complaint.file_number if complaint else f"Case #{case_id}"
+            db.add(Notification(
+                recipient_id=case.disciplinary_authority_id,
+                title="Case Review Required",
+                message=f"A response has been submitted for File No. {file_number} and requires your review.",
+                link=f"/da/pending-reviews",
+            ))
     elif action.action_type == "SERVE_FINAL_ORDER":
         case.final_order_proof_path = action.proof_path
         case.status = CaseStatus.APPEAL_WINDOW_OPEN
+        case.window_start_date = func.now()
     elif action.action_type == "MONTHLY_UNDERTAKING":
         case.monthly_undertaking_path = action.monthly_undertaking_path
     else:
@@ -248,6 +315,8 @@ def employee_response(
     prev_status = case.status
     if response.action_type == "EXPLANATION":
         case.employee_explanation_path = response.document_path
+        case.status = CaseStatus.EXPLANATION_RECEIVED
+        case.window_start_date = None # Stop the window
     elif response.action_type == "APPEAL":
         case.appeal_path = response.document_path
         case.status = CaseStatus.APPEAL_UNDER_REVIEW
@@ -276,23 +345,76 @@ def da_action(
         raise HTTPException(status_code=404, detail="Case not found")
 
     prev_status = case.status
+    
+    # Self-assign DA if not already assigned
+    if case.disciplinary_authority_id is None:
+        case.disciplinary_authority_id = current_user.id
+
+    complaint = case.complaint
+    file_number = complaint.file_number if complaint else f"Case #{case_id}"
+
+    # Determine the notice label for CO notification message
+    _notice_label_map = {
+        "ISSUE_SHOW_CAUSE": "Show-Cause Notice",
+        "ISSUE_REMINDER_1": "Reminder 1",
+        "ISSUE_REMINDER_2": "Reminder 2",
+        "ISSUE_FINAL_OPPORTUNITY": "Final Opportunity Notice",
+        "ISSUE_EX_PARTE": "Ex-Parte Proceedings Notice",
+    }
+
     if action.action_type == "ISSUE_SHOW_CAUSE":
         case.status = CaseStatus.SHOW_CAUSE_ISSUED
     elif action.action_type == "ISSUE_REMINDER_1":
-        # Waiting for CO to serve, DA just records intent.
-        pass
+        case.status = CaseStatus.REMINDER_1_SENT
     elif action.action_type == "ISSUE_REMINDER_2":
-        pass
+        case.status = CaseStatus.REMINDER_2_SENT
     elif action.action_type == "ISSUE_FINAL_OPPORTUNITY":
-        pass
+        case.status = CaseStatus.FINAL_OPPORTUNITY_SENT
     elif action.action_type == "ISSUE_EX_PARTE":
         case.status = CaseStatus.EX_PARTE_PROCEEDED
     elif action.action_type == "SEND_TO_CC":
-        case.status = CaseStatus.UNDER_CONCURRENCE_REVIEW
+        case.status = CaseStatus.UNDER_CC_REVIEW_MAJOR
+
+        # Notify Concurrence Committee
+        cc_members = db.query(User).filter(User.role == UserRole.CONCURRENCE_COMMITTEE).all()
+        for member in cc_members:
+            db.add(Notification(
+                recipient_id=member.id,
+                title="Concurrence Review Required",
+                message=f"Case for File No. {file_number} has been referred to the committee for concurrence.",
+                link=f"/dashboard/concurrence-committee",
+            ))
     elif action.action_type == "ISSUE_FINAL_ORDER":
         case.status = CaseStatus.DISCIPLINARY_ORDER_PENDING
     else:
         raise HTTPException(status_code=400, detail="Invalid action type.")
+
+    # Notify Controlling Officer for all notice-issuing actions
+    if action.action_type in _notice_label_map:
+        notice_label = _notice_label_map[action.action_type]
+        notif_title = "Notice Ready to Serve"
+        notif_message = (
+            f"DA has issued a {notice_label} for File No. {file_number}. "
+            f"Please serve it to the employee and upload proof of service."
+        )
+        
+        if case.controlling_officer_id:
+            db.add(Notification(
+                recipient_id=case.controlling_officer_id,
+                title=notif_title,
+                message=notif_message,
+                link=f"/dashboard/co",
+            ))
+        else:
+            # Broadcast to all COs if no specific one is assigned yet
+            all_cos = db.query(User).filter(User.role == UserRole.CO).all()
+            for co in all_cos:
+                db.add(Notification(
+                    recipient_id=co.id,
+                    title=f"[POOL] {notif_title}",
+                    message=notif_message,
+                    link=f"/dashboard/co",
+                ))
 
     db.add(CaseHistory(
         case_id=case.id,
@@ -318,8 +440,32 @@ def cc_action(
     prev_status = case.status
     if action.verdict == "CONCUR":
         case.status = CaseStatus.FINAL_ORDER_ISSUED_CONCURRED
+        
+        # Notify DA
+        if case.disciplinary_authority_id:
+            complaint = case.complaint
+            file_number = complaint.file_number if complaint else f"Case #{case_id}"
+            db.add(Notification(
+                recipient_id=case.disciplinary_authority_id,
+                title="Concurrence Approved",
+                message=f"The committee has concurred with the proposed penalty for File No. {file_number}. You can now issue the final order.",
+                link=f"/dashboard/da",
+            ))
     elif action.verdict == "MODIFY":
-        case.status = CaseStatus.FINAL_ORDER_ISSUED_MODIFIED
+        case.status = CaseStatus.REFERRED_TO_CMD_BY_CC
+        case.cc_modified_details = action.modified_punishment
+        
+        # Notify CMD
+        cmd_users = db.query(User).filter(User.role == UserRole.CMD).all()
+        complaint = case.complaint
+        file_number = complaint.file_number if complaint else f"Case #{case_id}"
+        for cmd in cmd_users:
+            db.add(Notification(
+                recipient_id=cmd.id,
+                title="Final Settlement Required",
+                message=f"The Concurrence Committee has modified the penalty for File No. {file_number} and referred it for your final settlement.",
+                link=f"/dashboard/cmd",
+            ))
     else:
         raise HTTPException(status_code=400, detail="Invalid verdict.")
 
@@ -331,4 +477,47 @@ def cc_action(
         comments=action.comments or f"Concurrence Committee verdict: {action.verdict}. {action.modified_punishment or ''}",
     ))
     db.commit()
+    return {"ok": True, "status": case.status}
+
+@router.put("/{case_id}/cmd-settle")
+def cmd_settle(
+    case_id: int,
+    action: CaseCMDSettle,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """CMD settles the final order after CC modification."""
+    if current_user.role != UserRole.CMD:
+        raise HTTPException(status_code=403, detail="Only CMD can perform this action")
+        
+    case = db.query(CaseModel).filter(CaseModel.id == case_id).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    prev_status = case.status
+    case.status = CaseStatus.FINAL_ORDER_ISSUED_MODIFIED
+    if action.final_punishment_details:
+        case.cc_modified_details = action.final_punishment_details
+
+    db.add(CaseHistory(
+        case_id=case.id,
+        from_status=prev_status,
+        to_status=case.status,
+        action_by_id=current_user.id,
+        comments=action.comments or f"CMD settled the final order. Punishment: {case.cc_modified_details}",
+    ))
+    
+    # Notify DA
+    if case.disciplinary_authority_id:
+        complaint = case.complaint
+        file_number = complaint.file_number if complaint else f"Case #{case_id}"
+        db.add(Notification(
+            recipient_id=case.disciplinary_authority_id,
+            title="Final Order Settled by CMD",
+            message=f"CMD has settled the final order for File No. {file_number}. You can now issue the final disciplinary order.",
+            link=f"/dashboard/da",
+        ))
+        
+    db.commit()
+    db.refresh(case)
     return {"ok": True, "status": case.status}

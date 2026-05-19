@@ -9,6 +9,7 @@ const SignupPage = () => {
         full_name: '',
         employee_id: '',
         email: '',
+        designation: '',
         phone_number: '',
         password: '',
         confirm_password: ''
@@ -31,6 +32,7 @@ const SignupPage = () => {
                 full_name: formData.full_name,
                 employee_id: formData.employee_id,
                 email: formData.email,
+                designation: formData.designation,
                 phone_number: formData.phone_number,
                 password: formData.password
             });
@@ -101,6 +103,29 @@ const SignupPage = () => {
                                     onChange={handleChange}
                                     required
                                 />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 md:col-span-2">
+                            <label className="block text-sm font-medium text-slate-300">Designation / Role</label>
+                            <div className="relative">
+                                <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500" />
+                                <select
+                                    name="designation"
+                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all appearance-none"
+                                    value={formData.designation}
+                                    onChange={handleChange}
+                                    required
+                                >
+                                    <option value="" disabled>Select your official designation...</option>
+                                    <option value="EMPLOYEE">Generic Employee</option>
+                                    <option value="CONTROLLING OFFICER">Controlling Officer (CO)</option>
+                                    <option value="DISCIPLINARY AUTHORITY">Disciplinary Authority (DA)</option>
+                                    <option value="ENQUIRY OFFICER">Enquiry Officer (EO)</option>
+                                    <option value="COMPLAINT OFFICER">Complaint Officer (CMT)</option>
+                                    <option value="CONCURRENCE COMMITTEE">Concurrence Committee Member</option>
+                                    <option value="APPEAL AUTHORITY">Appeal Authority</option>
+                                </select>
                             </div>
                         </div>
 

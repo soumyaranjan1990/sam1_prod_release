@@ -68,6 +68,12 @@ class Complaint(Base):
         return "REGISTERED"
 
     @property
+    def case_id(self):
+        if self.case:
+            return self.case.id
+        return None
+
+    @property
     def updated_at(self):
         if self.case and self.case.updated_at:
             return self.case.updated_at

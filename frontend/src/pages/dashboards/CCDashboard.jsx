@@ -59,7 +59,7 @@ const CCDashboard = () => {
         }
     };
 
-    const pendingCases = cases.filter(c => c.status === 'UNDER_CONCURRENCE_REVIEW');
+    const pendingCases = cases.filter(c => ['UNDER_CONCURRENCE_REVIEW', 'UNDER_CC_REVIEW_MAJOR'].includes(c.status));
     const concurredCases = cases.filter(c => ['FINAL_ORDER_ISSUED_CONCURRED', 'FINAL_ORDER_ISSUED_MODIFIED'].includes(c.status));
 
     return (
@@ -177,8 +177,8 @@ const CCDashboard = () => {
                                         <label className={`flex items-center gap-3 p-4 rounded-xl border cursor-pointer transition-all ${verdict === 'MODIFY' ? 'bg-indigo-500/10 border-indigo-500 text-white shadow-lg shadow-indigo-500/10' : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:border-slate-700'}`}>
                                             <input type="radio" required checked={verdict === 'MODIFY'} onChange={() => setVerdict('MODIFY')} className="accent-indigo-500" />
                                             <div className="flex-1">
-                                                <p className="font-bold">Modify Disciplinary Action</p>
-                                                <p className="text-xs uppercase tracking-tight opacity-75">Reduce or alter the penalty details</p>
+                                                <p className="font-bold">Modify & Send to CMD</p>
+                                                <p className="text-xs uppercase tracking-tight opacity-75">Modify penalty and refer to CMD for review</p>
                                             </div>
                                         </label>
                                     </div>
@@ -216,7 +216,7 @@ const CCDashboard = () => {
                                         disabled={submitting}
                                         className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2.5 rounded-xl font-bold transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-indigo-500/20"
                                     >
-                                        {submitting ? <Clock className="w-5 h-5 animate-spin" /> : <><Send className="w-4 h-4" /> Finalize Concurrence</>}
+                                        {submitting ? <Clock className="w-5 h-5 animate-spin" /> : <><Send className="w-4 h-4" /> {verdict === 'MODIFY' ? 'Send to CMD' : 'Finalize Concurrence'}</>}
                                     </button>
                                 </div>
                             </form>

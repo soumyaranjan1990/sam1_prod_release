@@ -19,6 +19,10 @@ class CaseStatus(str, enum.Enum):
     REMINDER_1_SENT = "REMINDER_1_SENT"
     REMINDER_2_SENT = "REMINDER_2_SENT"
     FINAL_OPPORTUNITY_SENT = "FINAL_OPPORTUNITY_SENT"
+    EXPLANATION_RECEIVED = "EXPLANATION_RECEIVED"
+    UNDER_DA_REVIEW_MAJOR = "UNDER_DA_REVIEW_MAJOR"
+    UNDER_CC_REVIEW_MAJOR = "UNDER_CC_REVIEW_MAJOR"
+    REFERRED_TO_CMD_BY_CC = "REFERRED_TO_CMD_BY_CC"
     EX_PARTE_PROCEEDED = "EX_PARTE_PROCEEDED"
     DISCIPLINARY_ORDER_PENDING = "DISCIPLINARY_ORDER_PENDING"
     UNDER_CONCURRENCE_REVIEW = "UNDER_CONCURRENCE_REVIEW"
@@ -60,6 +64,9 @@ class Case(Base):
     disciplinary_authority_id = Column(Integer, ForeignKey("user.id"), nullable=True)
     concurrence_committee_id = Column(Integer, ForeignKey("user.id"), nullable=True)
     appeal_authority_id = Column(Integer, ForeignKey("user.id"), nullable=True)
+    
+    window_start_date = Column(DateTime(timezone=True), nullable=True)
+    cc_modified_details = Column(Text, nullable=True)
     
     show_cause_served_date = Column(Date, nullable=True)
     show_cause_proof_path = Column(String(255), nullable=True)

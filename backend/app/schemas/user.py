@@ -51,6 +51,7 @@ class SignUpRequest(BaseModel):
     full_name: str
     employee_id: str
     email: EmailStr
+    designation: Optional[str] = None
     phone_number: Optional[str] = None
     password: str
 

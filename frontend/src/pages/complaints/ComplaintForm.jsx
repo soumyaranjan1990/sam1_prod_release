@@ -47,8 +47,12 @@ const ComplaintForm = () => {
             // 2. Submit complaint
             const employee_ids = tempEmpId
                 ? tempEmpId.split(',').map(id => {
-                    const idTrim = id.trim();
-                    const emp = employees.find(e => e.employee_id === idTrim || e.id.toString() === idTrim);
+                    const idTrim = id.trim().toLowerCase();
+                    const emp = employees.find(e => 
+                        e.employee_id?.toLowerCase() === idTrim || 
+                        e.id?.toString() === idTrim ||
+                        e.name?.toLowerCase().includes(idTrim)
+                    );
                     return emp ? emp.id : null;
                 }).filter(id => id !== null)
                 : [];
@@ -56,7 +60,12 @@ const ComplaintForm = () => {
             // Resolve complainant employee PK if applicable
             let complainant_pk = null;
             if (formData.complainant_type === 'EMPLOYEE' && formData.complainant_employee_id) {
-                const cEmp = employees.find(e => e.employee_id === formData.complainant_employee_id || e.id.toString() === formData.complainant_employee_id);
+                const cIdTrim = formData.complainant_employee_id.trim().toLowerCase();
+                const cEmp = employees.find(e => 
+                    e.employee_id?.toLowerCase() === cIdTrim || 
+                    e.id?.toString() === cIdTrim ||
+                    e.name?.toLowerCase().includes(cIdTrim)
+                );
                 complainant_pk = cEmp ? cEmp.id : null;
             }
 
@@ -85,9 +94,14 @@ const ComplaintForm = () => {
     // Helper: resolve employee name from ID
     const resolveNames = () =>
         tempEmpId.split(',').filter(id => id.trim()).map((id, i) => {
-            const emp = employees.find(e => e.id.toString() === id.trim());
+            const idTrim = id.trim().toLowerCase();
+            const emp = employees.find(e => 
+                e.employee_id?.toLowerCase() === idTrim || 
+                e.id?.toString() === idTrim ||
+                e.name?.toLowerCase().includes(idTrim)
+            );
             return emp
-                ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim()
+                ? emp.name
                 : `EMP #${id.trim()}`;
         });
 
@@ -230,9 +244,13 @@ const ComplaintForm = () => {
                                     {tempEmpId.trim() && (
                                         <div className="flex flex-wrap gap-2 mt-3 animate-in fade-in slide-in-from-top-1 duration-300">
                                             {tempEmpId.split(',').filter(id => id.trim()).map((id, i) => {
-                                                const idTrim = id.trim();
-                                                // Find employee by employee_id or id
-                                                const emp = employees.find(e => e.employee_id === idTrim || e.id.toString() === idTrim);
+                                                const idTrim = id.trim().toLowerCase();
+                                                // Find employee by employee_id, id, or name
+                                                const emp = employees.find(e => 
+                                                    e.employee_id?.toLowerCase() === idTrim || 
+                                                    e.id?.toString() === idTrim ||
+                                                    e.name?.toLowerCase().includes(idTrim)
+                                                );
                                                 return (
                                                     <div
                                                         key={i}

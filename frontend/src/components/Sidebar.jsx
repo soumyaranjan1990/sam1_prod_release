@@ -21,6 +21,7 @@ const Sidebar = ({ userRole }) => {
                     ...commonLinks,
                     { path: '/cases/review', label: 'Pending Cases', icon: FileText },
                     { path: '/cases/assigned', label: 'Assigned Cases', icon: ClipboardCheck },
+                    { path: '/dashboard/officer-availability', label: 'Officer Availability', icon: Users },
                     { path: '/officers', label: 'Enquiry Officers', icon: Users },
                 ];
             case 'COMPLAINT_OFFICER':
@@ -33,7 +34,13 @@ const Sidebar = ({ userRole }) => {
                 return [
                     ...commonLinks,
                     { path: '/cases/active', label: 'Active Enquiries', icon: Shield },
+                    { path: '/da/pending-reviews', label: 'Pending Explanations', icon: ClipboardCheck },
                     { path: '/orders/pending', label: 'Pending Orders', icon: FileText },
+                ];
+            case 'CO':
+                return [
+                    ...commonLinks,
+                    { path: '/dashboard/co', label: 'Case Management', icon: Shield },
                 ];
             case 'ENQUIRY_OFFICER':
                 return [
@@ -83,10 +90,18 @@ const Sidebar = ({ userRole }) => {
             </nav>
 
             <div className="border-t border-slate-800 pt-4 mt-auto space-y-2">
-                <button className="flex items-center gap-3 px-3 py-3 rounded-xl w-full text-left text-slate-400 hover:text-white hover:bg-slate-800 transition-all font-medium">
+                <NavLink
+                    to="/notifications"
+                    className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-3 rounded-xl transition-all font-medium ${isActive
+                            ? 'bg-primary-500/10 text-primary-400 border border-primary-500/20'
+                            : 'text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent'
+                        }`
+                    }
+                >
                     <Bell className="w-5 h-5" />
                     Notifications
-                </button>
+                </NavLink>
                 <button
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-3 py-3 rounded-xl w-full text-left text-red-400 hover:bg-red-500/10 transition-all font-medium"

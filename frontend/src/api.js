@@ -1,8 +1,14 @@
 // API base URL - adjust if necessary
 const getBaseApiUrl = () => {
     if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
-    // In local dev, use Vite proxy to avoid cross-origin/network host issues.
-    if (import.meta.env.DEV) return '/api/v1';
+    // In local dev, use the same hostname as the frontend page.
+    // This avoids loopback/address mapping issues on some environments.
+    if (import.meta.env.DEV) {
+        const host = window.location.hostname && window.location.hostname !== '0.0.0.0'
+            ? window.location.hostname
+            : 'localhost';
+        return `http://${host}:8000/api/v1`;
+    }
     const hostname = window.location.hostname || '127.0.0.1';
     return `http://${hostname}:8000/api/v1`;
 };

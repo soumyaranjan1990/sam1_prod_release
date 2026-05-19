@@ -54,7 +54,9 @@ class CRUDComplaint:
                 db.add(ComplaintEmployee(complaint_id=db_obj.id, employee_id=emp_exists.id))
 
         # Auto-create Case with REGISTERED status
-        new_case = Case(complaint_id=db_obj.id, status=CaseStatus.REGISTERED)
+        # Explicitly link via relationship for atomicity
+        new_case = Case(status=CaseStatus.REGISTERED)
+        new_case.complaint = db_obj
         db.add(new_case)
         db.flush()
 

@@ -34,6 +34,7 @@ def read_complaint_stats(
     if current_user.role == UserRole.COMPLAINT_OFFICER:
         query = query.filter(Complaint.registered_by_id == current_user.id)
     
+    total = query.count()
     unassigned = query.filter(Case.status == CaseStatus.REGISTERED).count()
     active = query.filter(Case.status.in_([CaseStatus.ASSIGNED, CaseStatus.UNDER_ENQUIRY])).count()
     pending = query.filter(
@@ -46,6 +47,7 @@ def read_complaint_stats(
     ).count()
     
     return {
+        "total": total,
         "unassigned": unassigned,
         "active": active,
         "pending": pending
@@ -71,7 +73,7 @@ def upload_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/", response_model=List[case_schemas.Complaint])
+@router.get("/")
 def read_complaints(
     db: Session = Depends(get_db),
     skip: int = 0,
@@ -83,58 +85,126 @@ def read_complaints(
     from app.models.employee import Employee
     from app.models.complaint import Complaint, ComplaintEmployee
 
-    # COMPLAINT_OFFICER: see ONLY their own registrations (strict AND filter)
+    # 1. Fetch the raw list of complaints based on role
     if current_user.role == UserRole.COMPLAINT_OFFICER:
-        return (
+        from sqlalchemy.orm import joinedload
+        complaints = (
             db.query(Complaint)
+            .options(joinedload(Complaint.case))
             .filter(Complaint.registered_by_id == current_user.id)
             .order_by(Complaint.created_at.desc())
             .offset(skip)
             .limit(limit)
             .all()
         )
-
-    # EMPLOYEE: only complaints they are tagged on or where they are the complainant
-    if current_user.role == UserRole.EMPLOYEE:
+    elif current_user.role == UserRole.EMPLOYEE:
         from sqlalchemy import or_
         emp = db.query(Employee).filter(Employee.user_id == current_user.id).first()
         if not emp:
-            return []
-        return (
+            # Fallback if no employee profile: still allow seeing ones they REGISTERED
+            complaints = (
+                db.query(Complaint)
+                .filter(Complaint.registered_by_id == current_user.id)
+                .order_by(Complaint.created_at.desc())
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
+        else:
+            from sqlalchemy.orm import joinedload
+            complaints = (
+                db.query(Complaint)
+                .options(joinedload(Complaint.case))
+                .outerjoin(ComplaintEmployee, Complaint.id == ComplaintEmployee.complaint_id)
+                .filter(or_(
+                    Complaint.complainant_employee_id == emp.id,
+                    ComplaintEmployee.employee_id == emp.id,
+                    Complaint.registered_by_id == current_user.id
+                ))
+                .order_by(Complaint.created_at.desc())
+                .distinct()
+                .offset(skip)
+                .limit(limit)
+                .all()
+            )
+    else:
+        # CMD and other privileged roles see everything
+        from sqlalchemy.orm import joinedload
+        complaints = (
             db.query(Complaint)
-            .outerjoin(ComplaintEmployee, Complaint.id == ComplaintEmployee.complaint_id)
-            .filter(or_(
-                Complaint.complainant_employee_id == emp.id,
-                ComplaintEmployee.employee_id == emp.id
-            ))
+            .options(joinedload(Complaint.case))
             .order_by(Complaint.created_at.desc())
-            .distinct()
             .offset(skip)
             .limit(limit)
             .all()
         )
+    
+    # 2. Universal Manual Serialization & Self-Healing
+    from app.schemas import case as case_schemas
+    from app.models.case import Case, CaseStatus
+    results = []
+    needs_commit = False
+    
+    for c in complaints:
+        if not c.case:
+            # On-the-fly repair for EVERY role
+            new_case = Case(status=CaseStatus.REGISTERED)
+            new_case.complaint = c
+            db.add(new_case)
+            needs_commit = True
+            db.flush() 
+            
+        data = case_schemas.Complaint.model_validate(c).model_dump()
+        data["case_id"] = c.case.id if c.case else None
+        data["status"] = c.case.status if c.case else "REGISTERED"
+        results.append(data)
+        
+    if needs_commit:
+        db.commit()
+    return results
 
-    # CMD and other privileged roles see everything
-    return (
-        db.query(Complaint)
-        .order_by(Complaint.created_at.desc())
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
 
-
-@router.get("/{complaint_id}", response_model=case_schemas.Complaint)
+@router.get("/{complaint_id}")
 def read_complaint(
     complaint_id: int,
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ) -> Any:
     """Get a single complaint by DB id."""
-    obj = db.query(ComplaintModel).filter(ComplaintModel.id == complaint_id).first()
+    from sqlalchemy.orm import joinedload
+    from app.models.user import UserRole
+    from app.models.employee import Employee
+    from app.models.complaint import ComplaintEmployee
+    from sqlalchemy import or_
+
+    obj = db.query(ComplaintModel).options(joinedload(ComplaintModel.case)).filter(ComplaintModel.id == complaint_id).first()
     if not obj:
         raise HTTPException(status_code=404, detail="Complaint not found")
-    return obj
+
+    # Access Control Check
+    if current_user.role == UserRole.COMPLAINT_OFFICER:
+        if obj.registered_by_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to view this complaint")
+    
+    elif current_user.role == UserRole.EMPLOYEE:
+        emp = db.query(Employee).filter(Employee.user_id == current_user.id).first()
+        is_owner = obj.registered_by_id == current_user.id
+        is_involved = False
+        if emp:
+            is_involved = (
+                obj.complainant_employee_id == emp.id or 
+                db.query(ComplaintEmployee).filter(
+                    ComplaintEmployee.complaint_id == obj.id, 
+                    ComplaintEmployee.employee_id == emp.id
+                ).first() is not None
+            )
+        if not (is_owner or is_involved):
+            raise HTTPException(status_code=403, detail="Not authorized to view this complaint")
+        
+    data = case_schemas.Complaint.model_validate(obj).model_dump()
+    data["case_id"] = obj.case.id if obj.case else None
+    data["status"] = obj.case.status if obj.case else "REGISTERED"
+    return data
 
 
 @router.post("/", response_model=case_schemas.Complaint)

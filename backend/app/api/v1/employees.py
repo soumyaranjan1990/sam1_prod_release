@@ -54,3 +54,17 @@ def read_employee(
     if not db_obj:
         raise HTTPException(status_code=404, detail="Employee not found")
     return db_obj
+
+@router.get("/lookup/{employee_id}")
+def lookup_employee(
+    employee_id: str,
+    db: Session = Depends(get_db),
+) -> Any:
+    """
+    Provision for external HRMS lookup.
+    """
+    from app.services.hrms import hrms_service
+    data = hrms_service.lookup_employee(db, employee_id=employee_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Employee not found in registry")
+    return data
